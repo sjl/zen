@@ -3,6 +3,8 @@
 A simple, roguelike not-quite game.  Basically I wanted to play around with
 getting a roguelike up and running end-to-end in Clojure.
 
+![Screenshot](http://i.imgur.com/JQu55.png)
+
 It's about 256 lines of code with comments for the meat of the game, and another
 80-ish that wrap Lanterna to make it more Clojurey.  It's certainly not the
 best/prettiest code.  Consider it a throwaway experiment.
