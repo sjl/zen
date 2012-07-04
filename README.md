@@ -3,6 +3,8 @@
 A simple, roguelike not-quite game.  Basically I wanted to play around with
 getting a roguelike up and running end-to-end in Clojure.
 
+[Screencast Demo](http://www.screenr.com/QKZ8)
+
 ![Screenshot](http://i.imgur.com/JQu55.png)
 
 It's about 256 lines of code with comments for the meat of the game, and another
