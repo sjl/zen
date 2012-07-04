@@ -6,8 +6,27 @@
 ; Constants -------------------------------------------------------------------
 (def rows 15)
 (def cols 40)
-(def canvas-rows (ref rows))
-(def canvas-cols (ref cols))
+
+(def welcome-message
+  ["Welcome to Zen."
+   ""
+   "In this game, you tend to a"
+   "small zen garden."
+   ""
+   "There is no winning, losing,"
+   "or saving."
+   ""
+   "Press any key to begin."])
+
+(def help-message
+  [" -- COMMANDS ------- "
+   " hjkl - move         "
+   " r    - rake         "
+   " q    - quit         "
+   " ?    - help         "
+   "                     "
+   " -- press any key -- "])
+
 
 (def dir-keys {\h :left
                \j :down
@@ -24,36 +43,39 @@
 
 (def solid? #{:rock :shrub})
 
-; World state -----------------------------------------------------------------
+; World/screen state ----------------------------------------------------------
 (def world (ref {}))
 (def player-x (ref 0))
 (def player-y (ref 0))
+(def canvas-rows (ref rows))
+(def canvas-cols (ref cols))
 
 ; Data structures -------------------------------------------------------------
 (defrecord Slot [kind ch])
 
 (defn make-sand
   ([] (make-sand (rand-nth ["~" "=" "≈"])))
-  ([ch] (Slot. :sand ch)))
+  ([ch] (new Slot :sand ch)))
 
 (defn make-footprint []
-  (Slot. :sand (rand-nth [":" ";"])))
+  (make-sand (rand-nth [":" ";"])))
 
 (defn make-rock []
-  (Slot. :rock "*"))
+  (new Slot :rock "*"))
 
 (defn make-shrub []
-  (Slot. :shrub "&"))
+  (new Slot :shrub "&"))
 
 
 ; Utility functions -----------------------------------------------------------
 (defn draw-message
   "Draw a message at the bottom of the screen.
 
-  Moves the cursor past the end of the message.  Doesn't refresh."
+  Moves the cursor past the end of the message.  Refreshes the screen."
   [screen msg]
   (draw screen 0 rows msg)
-  (set-cursor screen (inc (count msg)) rows))
+  (set-cursor screen (inc (count msg)) rows)
+  (refresh screen))
 
 (defn draw-lines
   "Draw a sequence of lines down the left side of the screen."
@@ -62,7 +84,8 @@
          [l & ls] lines]
     (when l
       (draw screen 0 i l)
-      (recur (inc i) ls))))
+      (recur (inc i) ls)))
+  (refresh screen))
 
 (defn get-choice
   "Get an input from the user.
@@ -81,7 +104,6 @@
   "Prompt a user for some input."
   [screen msg choices]
   (draw-message screen msg)
-  (refresh screen)
   (get-choice screen choices))
 
 (defn calc-coords
@@ -134,25 +156,23 @@
       [nil nil])))
 
 
-(defn command-help
+(defmulti handle-command
+  (fn [command screen data] command))
+
+
+(defmethod handle-command nil [_ screen _]
+  nil)
+
+(defmethod handle-command :help [_ screen _]
   "Draw a help message on the screen and wait for the user to press a key."
-  [screen _]
-  (draw-lines screen [" -- COMMANDS ------- "
-                      " hjkl - move         "
-                      " r    - rake         "
-                      " q    - quit         "
-                      " ?    - help         "
-                      "                     "
-                      " -- press any key -- "])
-  (refresh screen)
+  (draw-lines screen help-message)
   (get-key-blocking screen))
 
-(defn command-move
+(defmethod handle-command :move [_ _ dir]
   "Move the player in the given direction.
 
   Does bounds checking and ensures the player doesn't walk through solid
   objects, so a player might not actually end up moving."
-  [_ dir]
   (dosync
     (let [[x y] (calc-coords @player-x @player-y dir)
           x (max 0 x)
@@ -173,31 +193,23 @@
                  (= :sand (:kind target)))
         (alter world assoc coords (make-sand style))))))
 
-(defn command-rake [screen _]
+(defmethod handle-command :rake [_ screen _]
   (when-let [dir (prompt screen "Which direction [hjkl]?" dir-keys)]
     (when-let [style (prompt screen "Which style [1~ 2= 3≈]?" rake-keys)]
       (rake dir style))))
 
 
-(def commands {:help command-help
-               :move command-move
-               :rake command-rake})
-
-
 ; World generation ------------------------------------------------------------
-(defn rand-coord []
-  [(rand-int cols) (rand-int rows)])
-
 (defn rand-placement [item]
-  (into {} (repeatedly (+ 5 (rand-int 5))
-                       (fn [] [(rand-coord) item]))))
+  (into {} (for [_ (range (+ 5 (rand-int 5)))]
+             [[(rand-int cols) (rand-int rows)]
+              item])))
 
 
 (defn sand []
-  (into {}
-        (for [x (range cols)
-              y (range rows)]
-          [[x y] (make-sand)])))
+  (into {} (for [x (range cols)
+                 y (range rows)]
+             [[x y] (make-sand)])))
 
 (defn rocks []
   (rand-placement (make-rock)))
@@ -207,23 +219,14 @@
 
 
 (defn generate-world []
-  (let [new-world (merge (sand) (rocks) (shrubs))
-        new-world (assoc new-world [0 0] (make-footprint))]
+  (let [new-world (-> (merge (sand) (rocks) (shrubs))
+                    (assoc [0 0] (make-footprint)))]
     (dosync (ref-set world new-world))))
 
 
 ; Main ------------------------------------------------------------------------
 (defn intro [screen]
-  (draw-lines screen ["Welcome to Zen."
-                      ""
-                      "In this game, you tend to a"
-                      "small zen garden."
-                      ""
-                      "There is no winning, losing,"
-                      "or saving."
-                      ""
-                      "Press any key to begin."])
-  (refresh screen)
+  (draw-lines screen welcome-message)
   (get-key-blocking screen))
 
 (defn game-loop [screen]
@@ -232,8 +235,7 @@
     (if (= command :quit)
       (kill-screen screen)
       (do
-        (when-let [handler (commands command)]
-          (handler screen data))
+        (handle-command command screen data)
         (recur screen)))))
 
 (defn handle-resize [rows cols]
@@ -249,8 +251,4 @@
 
 
 (defn -main [& args]
-  (go))
-
-
-(comment
   (go))
